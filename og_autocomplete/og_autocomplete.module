@@ -1,0 +1,241 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Module for selecting audiences through autocomplete
+ */
+
+define('OG_AUTOCOMPLETE_OFF', 0);
+define('OG_AUTOCOMPLETE_ON', 1);
+
+/**
+ * Implementation of hook_menu().
+ */
+function og_autocomplete_menu() {
+  $items = array();
+
+  $items['og/autocomplete/ahah'] = array(
+    'page callback' => 'og_autocomplete_ahah',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['og/autocomplete/autocomplete/%/%'] = array(
+    'page callback' => 'og_autocomplete_autocomplete',
+    'page arguments' => array(3, 4),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_form_alter().
+ *
+ * @param array $form Nested array of form elements that comprise the form.
+ * @param array $form_state A keyed array containing the current state of the form.
+ * @param sting $form_id The name of the form itself. Typically this is the name of the function that generated the form.
+ *
+ * @return void
+ */
+function og_autocomplete_form_alter(&$form, $form_state, $form_id) {
+  if (isset($form['#node']) && $form_id === $form['#node']->type .'_node_form' && og_is_group_post_type($form['#node']->type) && variable_get('og_autocomplete', OG_AUTOCOMPLETE_OFF) == OG_AUTOCOMPLETE_ON && isset($form['og_nodeapi']['visible'])) {
+    $node = $form['#node'];
+    $options = array();
+    $og_field = $form['og_nodeapi']['visible']['og_groups'];
+    $og_field_options = $og_field['#options'];
+
+    if (isset($og_field_options[t('My groups')]) || isset($og_field_options[t('Other groups')])) {
+      $og_field_options = array_merge($og_field_options[t('My groups')], $og_field_options[t('Other groups')]);
+    }
+
+    //Make sure that the groups are an array
+    if (!is_array($node->og_groups)) {
+      $node->og_groups = (array) $node->og_groups;
+    }
+
+    //Make sure that we have the group descriptions
+    if (!isset($node->og_groups_both)) {
+      if (!empty($node->og_groups)) {
+        //Create og_groups_both
+        foreach ($node->og_groups as $nid) {
+          $node->og_groups_both[$nid] = $og_field_options[$nid];
+        }
+      }
+      else {
+        $node->og_groups_both = array();
+      }
+    }
+
+    if (user_access('administer nodes')) {
+      // Node admins see all of groups.
+      $options = $node->og_groups_both;
+    }
+    else {
+      foreach ($node->og_groups as $key) {
+        if (isset($og_field_options[$key])) {
+          $options[$key] = $og_field_options[$key];
+        }
+      }
+    }
+
+    $form['og_nodeapi']['visible'] += array(
+      '#prefix' => '<div id="og-autocomplete-wrapper">',
+      '#suffix' => '</div>',
+      '#cache' => TRUE,
+    );
+
+    $form['og_nodeapi']['visible']['og_autocomplete'] = array(
+      '#weight' => 5,
+    );
+
+    $form['og_nodeapi']['visible']['og_autocomplete']['og_autocomplete_group'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Add Group'),
+      '#autocomplete_path' => 'og/autocomplete/autocomplete/'. $node->type,
+      '#description' => t('Type to search for a group and press @button to add that group to the audience.', array('@button' => t('Add Group'))),
+    );
+
+    $form['og_nodeapi']['visible']['og_autocomplete']['add'] = array(
+      '#type' => 'submit',
+      '#value' => t('Add Group'),
+      '#name' => 'add',
+      '#ahah' => array(
+        'path' => 'og/autocomplete/ahah',
+        'wrapper' => 'og-autocomplete-wrapper',
+      ),
+    );
+
+    $form['og_nodeapi']['visible']['og_groups']['#type'] = 'checkboxes';
+    $form['og_nodeapi']['visible']['og_groups']['#options'] = $options;
+  }
+}
+
+/**
+ * Implementation of alter for the og_admin_settings form
+ */
+function og_autocomplete_form_og_admin_settings_alter(&$form, &$form_state) {
+  $form['og_settings']['group_details']['og_autocomplete'] = array(
+    '#type' => 'radios',
+    '#title' => t('Audience checkboxes'),
+    '#default_value' => variable_get('og_autocomplete', OG_AUTOCOMPLETE_OFF),
+    '#options' => array(
+      OG_AUTOCOMPLETE_OFF => t('Show all groups'),
+      OG_AUTOCOMPLETE_ON  => t('Find groups through autocomplete'),
+    ),
+    '#description' => t('Autocomplete let\'s the user search for groups to add as audiences instead of showing all groups as checkboxes initially.'),
+  );
+}
+
+/**
+ * Callback for the AHAH-function
+ */
+function og_autocomplete_ahah() {
+  $cached_form_state = array();
+  $cached_form = form_get_cache($_POST['form_build_id'], $cached_form_state);
+
+  $single = ($cached_form['og_nodeapi']['visible']['og_groups']['#multiple'] === FALSE);
+
+  $form_state = array('values' => $_POST);
+
+  //Saves the selections that have been made
+  $cached_form['og_nodeapi']['visible']['og_groups']['#default_value'] = $single ? $form_state['values']['og_groups'] : array_values((array) $form_state['values']['og_groups']);
+
+  $title = trim($form_state['values']['og_autocomplete_group']);
+  if (!empty($title)) {
+    $new = TRUE;
+    if (preg_match('/^(?:\s*|(.*) )?\[nid:(\d+)\]$/', $title, $matches)) {
+      list(, $title, $nid) = $matches;
+      if (!empty($title) && ($new = node_load($nid)) && $title != $new->title) {
+        form_set_error('new', t('Title doesn\'t match id.'));
+        $new = FALSE;
+      }
+    }
+    else if (!($new = node_load(array('title' => $title)))) {
+      form_set_error('new', t('Group doesn\'t exist.'));
+    }
+
+    if ($new) {
+      $access = og_node_groups_distinguish(array($new->nid, $new->title), FALSE);
+      if (!count($access['accessible'])) {
+        form_set_error('new', t('You\'re not allowed to post a node to this group.'));
+      }
+      else {
+        if ($single) {
+          $cached_form['og_nodeapi']['visible']['og_groups']['#default_value'] = $new->nid;
+        }
+        else {
+          $cached_form['og_nodeapi']['visible']['og_groups']['#default_value'][] = $new->nid;
+        }
+        $cached_form['og_nodeapi']['visible']['og_groups']['#options'][$new->nid] = $new->title;
+      }
+    }
+  }
+
+  if ($count = count($cached_form['og_nodeapi']['visible']['og_groups']['#options'])) {
+    $description = format_plural($count, 'Show this post in this group.', 'Show this post in these groups.');
+  }
+  else {
+    $description = t('No groups added yet');
+  }
+
+  $cached_form['og_nodeapi']['visible']['og_groups']['#description'] = $description;
+
+  //Saves the changes to the cache
+  form_set_cache($_POST['form_build_id'], $cached_form, $cached_form_state);
+
+  //Prepares the form which will be returned
+  $form = $cached_form['og_nodeapi']['visible'];
+
+  unset($form['prefix'], $form['suffix']);
+
+  $form += array(
+    '#post' => $_POST,
+    '#programmed' => FALSE,
+    '#tree' => FALSE,
+    '#parents' => array(),
+  );
+
+  drupal_alter('form', $form, array(), 'og_autocomplete_ahah');
+  $form_state = array('submitted' => FALSE);
+  $form = form_builder('og_autocomplete_ahah', $form, $form_state);
+  $output = theme('status_messages') . drupal_render($form);
+
+  print drupal_to_js(array('status' => TRUE, 'data' => $output));
+  exit;
+}
+
+/**
+ * Callback for the autocomplete
+ */
+function og_autocomplete_autocomplete($type = '', $string = '') {
+  global $user;
+
+  $matches = array();
+
+  $string = trim($string);
+  if (!empty($string)) {
+    if (user_access('administer nodes')) {
+      list($types, $in) = og_get_sql_args();
+
+      $sql  = "SELECT n.title, n.nid FROM {node} n WHERE n.type $in AND n.status = 1 AND n.title LIKE '%%%s%%' GROUP BY n.nid ORDER BY n.title ASC";
+      $types[] = $string;
+
+      $result = db_query_range(db_rewrite_sql($sql), $types, 0, 25);
+      while ($row = db_fetch_object($result)) {
+        $matches[$row->title .' [nid:'. $row->nid .']'] = check_plain($row->title);
+      }
+    }
+    else {
+      foreach ($user->og_groups as $group) {
+        if (stripos($group['title'], $string) !== FALSE) {
+          $matches[$group['title'] .' [nid:'. $group['nid'] .']'] = check_plain($group['title']);
+        }
+      }
+    }
+  }
+
+  drupal_json($matches);
+}

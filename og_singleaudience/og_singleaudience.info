@@ -1,0 +1,6 @@
+; $Id$
+name = Organic groups single audience
+description = Makes it possible to limit certain node types to have only a single audience
+package = "Organic groups"
+dependencies[] = og
+core = 6.x

@@ -1,0 +1,25 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install file for a module that limits nodes of certain node types to have multiple audiences
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function og_singleaudience_install() {
+  $weight = db_result(db_query("SELECT MAX(weight) FROM {system} WHERE name IN ('og', 'og_autocomplete')"));
+  db_query("UPDATE {system} SET weight = %d WHERE name = 'og_singleaudience'", $weight + 10);
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function og_singleaudience_uninstall() {
+  $types = node_get_types();
+  foreach ($types as $type) {
+    variable_del('og_singleaudience_'. $type->type);
+  }
+}

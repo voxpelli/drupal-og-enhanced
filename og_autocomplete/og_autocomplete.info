@@ -1,0 +1,6 @@
+; $Id$
+name = Organic groups autocomplete
+description = Provides autocomplete for use with Organic Groups audience selection
+package = "Organic groups"
+dependencies[] = og
+core = 6.x

@@ -1,0 +1,76 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Module for limiting nodes of certain node types to have single audiences
+ */
+
+define('OG_SINGLEAUDIENCE_SINGLE', 0);
+define('OG_SINGLEAUDIENCE_MULTIPLE', 1);
+
+function og_singleaudience_perm() {
+  return array('always multiple group audiences');
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function og_singleaudience_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['#node']) && $form_id === $form['#node']->type .'_node_form' && og_is_group_post_type($form['#node']->type) && isset($form['og_nodeapi']['visible'])) {
+    $option = variable_get('og_singleaudience_'. $form['#node']->type, OG_SINGLEAUDIENCE_MULTIPLE);
+    if ($option == OG_SINGLEAUDIENCE_SINGLE && !user_access('always multiple group audiences')) {
+      $form['og_nodeapi']['visible']['og_groups']['#multiple'] = FALSE;
+      $form['#validate'][] = 'og_singleaudience_validate';
+      if ($form['og_nodeapi']['visible']['og_groups']['#type'] !== 'select') {
+        $form['og_nodeapi']['visible']['og_groups']['#type'] = 'radios';
+        if (is_array($form['og_nodeapi']['visible']['og_groups']['#default_value'])) {
+          $form['og_nodeapi']['visible']['og_groups']['#default_value'] = array_shift($form['og_nodeapi']['visible']['og_groups']['#default_value']);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Validation function for converting single value audiences to arrays
+ */
+function og_singleaudience_validate($form, &$form_state) {
+  if (!is_array($form_state['values']['og_groups'])) {
+    $value = array(
+      intval($form_state['values']['og_groups']) => $form_state['values']['og_groups'],
+    );
+    form_set_value($form['og_nodeapi']['visible']['og_groups'], $value, $form_state);
+  }
+}
+
+/**
+ * Implementation of alter for the node_type_form form
+ */
+function og_singleaudience_form_node_type_form_alter(&$form, &$form_state) {
+  $type = isset($form['identity']['type']['#default_value']) ? $form['identity']['type']['#default_value'] : $form['identity']['type']['#value'];
+
+  $form['og']['og_singleaudience'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Can have multiple audiences'),
+    '#default_value' => variable_get('og_singleaudience_'. $type, OG_SINGLEAUDIENCE_MULTIPLE),
+    '#description' => t('Whether users should be able to assign many audiences to nodes of this type'),
+  );
+}
+
+/**
+ * Implementation of hook_node_type().
+ */
+function og_singleaudience_node_type($op, $info) {
+  switch ($op) {
+    case 'delete':
+      variable_del('og_singleaudience_'. $info->type);
+      break;
+    case 'update':
+      $option = variable_get('og_singleaudience_'. $info->type, OG_SINGLEAUDIENCE_MULTIPLE);
+      variable_set('og_singleaudience_'. $info->type, $option);
+      if (isset($info->old_type)) {
+        variable_del('og_singleaudience_'. $info->old_type);
+      }
+  }
+}

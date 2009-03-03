@@ -1,0 +1,22 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install file for module for selecting audiences through autocomplete
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function og_autocomplete_install() {
+  $weight = db_result(db_query("SELECT weight FROM {system} WHERE name = 'og'"));
+  db_query("UPDATE {system} SET weight = %d WHERE name = 'og_autocomplete'", $weight + 10);
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function og_autocomplete_uninstall() {
+  variable_del('og_autocomplete');
+}
