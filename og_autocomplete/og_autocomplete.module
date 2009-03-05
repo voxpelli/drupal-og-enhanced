@@ -146,7 +146,7 @@ function og_autocomplete_ahah() {
   $title = trim($form_state['values']['og_autocomplete_group']);
   if (!empty($title)) {
     $new = TRUE;
-    if (preg_match('/^(?:\s*|(.*) )?\[nid:(\d+)\]$/', $title, $matches)) {
+    if (preg_match('/^(?:\s*|(.*) )?\((\d+)\)$/', $title, $matches)) {
       list(, $title, $nid) = $matches;
       if (!empty($title) && ($new = node_load($nid)) && $title != $new->title) {
         form_set_error('new', t('Title doesn\'t match id.'));
@@ -158,8 +158,14 @@ function og_autocomplete_ahah() {
     }
 
     if ($new) {
-      $access = og_node_groups_distinguish(array($new->nid, $new->title), FALSE);
-      if (!count($access['accessible'])) {
+      $access = user_access('administer nodes');
+
+      if (!$access) {
+        $access = og_node_groups_distinguish(array($new->nid => $new->title), FALSE);
+        $access = count($access['accessible']) !== 0;
+      }
+
+      if (!$access) {
         form_set_error('new', t('You\'re not allowed to post a node to this group.'));
       }
       else {
@@ -225,13 +231,13 @@ function og_autocomplete_autocomplete($type = '', $string = '') {
 
       $result = db_query_range(db_rewrite_sql($sql), $types, 0, 25);
       while ($row = db_fetch_object($result)) {
-        $matches[$row->title .' [nid:'. $row->nid .']'] = check_plain($row->title);
+        $matches[$row->title .' ('. $row->nid .')'] = check_plain($row->title);
       }
     }
     else {
       foreach ($user->og_groups as $group) {
         if (stripos($group['title'], $string) !== FALSE) {
-          $matches[$group['title'] .' [nid:'. $group['nid'] .']'] = check_plain($group['title']);
+          $matches[$group['title'] .' ('. $group['nid'] .')'] = check_plain($group['title']);
         }
       }
     }
