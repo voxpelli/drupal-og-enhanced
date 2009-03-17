@@ -41,7 +41,7 @@ function og_autocomplete_menu() {
  * @return void
  */
 function og_autocomplete_form_alter(&$form, $form_state, $form_id) {
-  if (isset($form['#node']) && $form_id === $form['#node']->type .'_node_form' && og_is_group_post_type($form['#node']->type) && variable_get('og_autocomplete', OG_AUTOCOMPLETE_OFF) == OG_AUTOCOMPLETE_ON && isset($form['og_nodeapi']['visible'])) {
+  if (isset($form['#node']) && $form_id === $form['#node']->type .'_node_form' && og_is_group_post_type($form['#node']->type) && variable_get('og_autocomplete', OG_AUTOCOMPLETE_OFF) == OG_AUTOCOMPLETE_ON && isset($form['og_nodeapi']['visible']) && in_array($form['og_nodeapi']['visible']['og_groups']['#type'], array('select', 'checkboxes'))) {
     $node = $form['#node'];
     $options = array();
     $og_field = $form['og_nodeapi']['visible']['og_groups'];
