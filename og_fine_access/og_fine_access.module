@@ -1,0 +1,170 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Provides fine grained privacy options for groups
+ */
+
+define('OG_FINE_ACCESS_PUBLIC_POSTS', FALSE);
+define('OG_FINE_ACCESS_PRIVATE_POSTS', TRUE);
+
+/**
+ * Implementation of hook_content_extra_fields().
+ */
+function og_fine_access_content_extra_fields($type_name) {
+  $extra = array();
+  if (og_is_group_type($type_name)) {
+    $extra['og_fine_access_posts'] = array(
+      'label' => t('Public content'),
+      'description' => t('Checkbox for whether the groups content should be shown for non-members or not.'),
+    );
+  }
+  return $extra;
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function og_fine_access_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['#node']) && $form_id == $form['#node']->type .'_node_form') {
+    drupal_add_js(drupal_get_path('module', 'og_fine_access') .'/og_fine_access.js');
+    $node = $form['#node'];
+    if (og_is_group_type($node->type)) {
+      $form['og_fine_access_posts'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Private content'),
+        '#default_value' => isset($node->nid) ? $node->og_fine_access_posts : OG_FINE_ACCESS_PUBLIC_POSTS,
+        '#weight' => module_exists('content') ? content_extra_field_weight($node->type, 'og_fine_access_posts') : 0,
+        '#description' => t('Should content posted in this group be hidden for non-members?')
+      );
+    }
+  }
+}
+
+function _og_fine_access_get_privacy($nid) {
+  $private = db_result(db_query('SELECT private FROM {og_fine_access} WHERE nid = %d', array(
+    ':nid' => $nid,
+  )));
+  return ($private !== FALSE && $private == OG_FINE_ACCESS_PRIVATE_POSTS) ?
+    OG_FINE_ACCESS_PRIVATE_POSTS :
+    OG_FINE_ACCESS_PUBLIC_POSTS;
+}
+
+function _og_fine_access_calculate_privacy($groups) {
+  $new = OG_FINE_ACCESS_PUBLIC_POSTS;
+  if (is_array($groups) && !empty($groups)) {
+    $count = db_result(db_query('SELECT COUNT(nid) FROM {og_fine_access} WHERE nid IN ('. db_placeholders($groups) .') AND private = 1', $groups));
+
+    if ($count == count($groups)) {
+      $new = OG_FINE_ACCESS_PRIVATE_POSTS;
+    }
+  }
+  return $new;
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function og_fine_access_nodeapi(&$node, $op) {
+  $is_group = og_is_group_type($node->type);
+
+  if (!$is_group) {
+    if (!og_is_group_post_type($node->type)) {
+      return;
+    }
+    else if (in_array($op, array('update', 'insert'))) {
+      $node->og_fine_access_posts = _og_fine_access_calculate_privacy($node->og_groups);
+    }
+  }
+
+  $new_value = ($op === 'insert' || ($op === 'update' && $node->og_fine_access_posts !== _og_fine_access_get_privacy($node->nid)));
+
+  if ($op === 'load') {
+    $node->og_fine_access_posts = _og_fine_access_get_privacy($node->nid);
+  }
+  else if (!$is_group && $op === 'prepare' && $node->og_fine_access_posts !== _og_fine_access_calculate_privacy($node->og_groups)) {
+    if ($node->og_fine_access_posts === OG_FINE_ACCESS_PRIVATE_POSTS) {
+      drupal_set_message(t('One or more of this post\'s groups has become public - your post will also become public if you save it.'), 'warning');
+    }
+    else {
+      drupal_set_message(t('All of this post\'s groups has become private - your post will also become private if you save it.'), 'status');
+    }
+  }
+  else if ($op === 'delete' || ($op === 'update' && $node->og_fine_access_posts != OG_FINE_ACCESS_PRIVATE_POSTS && $new_value)) {
+    db_query('DELETE FROM {og_fine_access} WHERE nid = %d', array(
+      ':nid' => $node->nid,
+    ));
+    if ($op === 'update') {
+      if ($is_group) {
+        drupal_set_message(t('@type %title is now public - all new and updated content will be viewable by everyone.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'warning');
+      }
+      else {
+        drupal_set_message(t('@type %title is now public and viewable for other than group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'warning');
+      }
+    }
+  }
+  else if (in_array($op, array('update', 'insert')) && $node->og_fine_access_posts == OG_FINE_ACCESS_PRIVATE_POSTS && $new_value) {
+    $object = (object) array(
+      'nid' => $node->nid,
+      'private' => OG_FINE_ACCESS_PRIVATE_POSTS,
+    );
+    drupal_write_record('og_fine_access', $object);
+    if ($op === 'update') {
+      if ($is_group) {
+        drupal_set_message(t('@type %title is now private - all new and updated content will be viewable only for group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'status');
+      }
+      else {
+        drupal_set_message(t('@type %title is now private and only viewable by group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'status');
+      }
+    }
+  }
+}
+
+/**
+ * Implementation of hook_node_grants().
+ */
+function og_fine_access_node_grants($account, $op) {
+  if ($subscriptions = og_get_subscriptions($account->uid)) {
+    foreach ($subscriptions as $key => $val) {
+      $grants['og_fine_subscriber'][] = $key;
+    }
+  }
+
+  return isset($grants) ? $grants : array();
+}
+
+/**
+ * Implementation of hook_node_access_records().
+ */
+function og_fine_access_node_access_records($node) {
+  if (!empty($node->og_groups)) {
+    $count = db_result(db_query('SELECT COUNT(nid) FROM {og_fine_access} WHERE nid IN ('. db_placeholders($node->og_groups) .') AND private = 1', $node->og_groups));
+
+    // Applies to non group nodes.
+    if ($count == count($node->og_groups)) {
+      foreach ($node->og_groups as $gid) {
+        $grants[] = array(
+          'realm'        => 'og_fine_subscriber',
+          'gid'          => $gid,
+          'grant_view'   => 1,
+          'grant_update' => 0,
+          'grant_delete' => 0,
+          'priority'     => 0,
+        );
+      }
+    }
+  }
+
+  return isset($grants) ? $grants : NULL;
+}
+
+/**
+ * Implementation of hook_node_access_explain().
+ */
+function og_fine_access_node_access_explain($row) {
+  if ($row->realm == 'og_fine_subscriber') {
+    $node = node_load((int)$row->gid);
+    return t('Members of <a href="@group-node">@group-name</a> may view this node.', array('@group-node' => url('node/'. $row->gid), '@group-name' => $node->title));
+  }
+}

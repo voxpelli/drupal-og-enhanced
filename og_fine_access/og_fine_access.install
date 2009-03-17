@@ -1,0 +1,53 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install file for the fine grained access module for OG
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function og_fine_access_install() {
+  // Put this module after OG so it can form_alter as needed.
+  db_query("UPDATE {system} SET weight = 1 WHERE name = 'og_fine_access'");
+  drupal_install_schema('og_fine_access');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function og_fine_access_uninstall() {
+  drupal_uninstall_schema('og_fine_access');
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function og_fine_access_schema() {
+  $schema = array();
+
+  $schema['og_fine_access'] = array(
+    'description' => t('The access settings for nodes.'),
+    'fields' => array(
+      'nid' => array(
+        'description' => t('The node id of the group.'),
+        'type'        => 'int',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+      ),
+      'private' => array(
+        'description' => t('Whether the content is private or not.'),
+        'type'        => 'int',
+        'size'        => 'tiny',
+        'unsigned'    => TRUE,
+        'not null'    => TRUE,
+        'default'     => 0,
+      ),
+    ),
+    'primary key' => array('nid'),
+  );
+
+  return $schema;
+}

@@ -1,0 +1,6 @@
+; $Id$
+name = Organic groups fine access control
+description = "Enable fine grained access control for private posts and private groups."
+package = "Organic groups"
+dependencies[] = og
+core = 6.x
