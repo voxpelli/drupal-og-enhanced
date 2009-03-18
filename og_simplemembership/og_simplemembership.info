@@ -1,0 +1,6 @@
+; $Id$
+name = Organic groups simple memberships
+description = "Simplifies the types of memberships to declutter the interface"
+package = "Organic groups"
+dependencies[] = og
+core = 6.x

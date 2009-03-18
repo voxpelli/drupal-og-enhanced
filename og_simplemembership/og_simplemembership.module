@@ -1,0 +1,22 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Simplifies the memberships types for groups
+ */
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function og_simplemembership_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['#node']) && $form_id == $form['#node']->type .'_node_form' && og_is_group_type($form['#node']->type)) {
+    $form['og_selective'] = array(
+      '#type'   => 'checkbox',
+      '#title'  => $form['og_selective']['#options'][1],
+      '#weight' => $form['og_selective']['#weight'],
+      '#default_value' => $form['og_selective']['#default_value'] == OG_OPEN ? 0 : 1,
+      '#description' => t('Should memberships need approvement?'),
+    );
+  }
+}

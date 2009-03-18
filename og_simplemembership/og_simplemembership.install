@@ -1,0 +1,15 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install file for a module that simplifies the membership types for organic groups
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function og_simplemembership_install() {
+  $weight = db_result(db_query("SELECT weight FROM {system} WHERE name = 'og'"));
+  db_query("UPDATE {system} SET weight = %d WHERE name = 'og_simplemembership'", $weight + 10);
+}
