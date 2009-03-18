@@ -6,8 +6,8 @@
  * Provides fine grained privacy options for groups
  */
 
-define('OG_FINE_ACCESS_PUBLIC_POSTS', FALSE);
-define('OG_FINE_ACCESS_PRIVATE_POSTS', TRUE);
+define('OG_FINE_ACCESS_PUBLIC_POSTS', 0);
+define('OG_FINE_ACCESS_PRIVATE_POSTS', 1);
 
 /**
  * Implementation of hook_content_extra_fields().
@@ -28,7 +28,6 @@ function og_fine_access_content_extra_fields($type_name) {
  */
 function og_fine_access_form_alter(&$form, &$form_state, $form_id) {
   if (isset($form['#node']) && $form_id == $form['#node']->type .'_node_form') {
-    drupal_add_js(drupal_get_path('module', 'og_fine_access') .'/og_fine_access.js');
     $node = $form['#node'];
     if (og_is_group_type($node->type)) {
       $form['og_fine_access_posts'] = array(
@@ -78,7 +77,7 @@ function og_fine_access_nodeapi(&$node, $op) {
     }
   }
 
-  $new_value = ($op === 'insert' || ($op === 'update' && $node->og_fine_access_posts !== _og_fine_access_get_privacy($node->nid)));
+  $new_value = ($op === 'insert' || ($op === 'update' && $node->og_fine_access_posts != _og_fine_access_get_privacy($node->nid)));
 
   if ($op === 'load') {
     $node->og_fine_access_posts = _og_fine_access_get_privacy($node->nid);
@@ -97,7 +96,7 @@ function og_fine_access_nodeapi(&$node, $op) {
     ));
     if ($op === 'update') {
       if ($is_group) {
-        drupal_set_message(t('@type %title is now public - all new and updated content will be viewable by everyone.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'warning');
+        drupal_set_message(t('@type %title is now public - all new and updated content in it will be viewable by everyone.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'warning');
       }
       else {
         drupal_set_message(t('@type %title is now public and viewable for other than group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'warning');
@@ -112,7 +111,7 @@ function og_fine_access_nodeapi(&$node, $op) {
     drupal_write_record('og_fine_access', $object);
     if ($op === 'update') {
       if ($is_group) {
-        drupal_set_message(t('@type %title is now private - all new and updated content will be viewable only for group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'status');
+        drupal_set_message(t('@type %title is now private - all new and updated content in it will be viewable only for group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'status');
       }
       else {
         drupal_set_message(t('@type %title is now private and only viewable by group members.', array('@type' => node_get_types('name', $node), '%title' => $node->title)), 'status');
