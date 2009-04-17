@@ -226,7 +226,7 @@ function og_autocomplete_autocomplete($type = '', $string = '') {
     if (user_access('administer nodes')) {
       list($types, $in) = og_get_sql_args();
 
-      $sql  = "SELECT n.title, n.nid FROM {node} n WHERE n.type $in AND n.status = 1 AND n.title LIKE '%%%s%%' GROUP BY n.nid ORDER BY n.title ASC";
+      $sql  = "SELECT n.nid, n.title FROM {node} n WHERE n.type $in AND n.status = 1 AND n.title LIKE '%%%s%%' GROUP BY n.nid ORDER BY n.title ASC";
       $types[] = $string;
 
       $result = db_query_range(db_rewrite_sql($sql), $types, 0, 25);

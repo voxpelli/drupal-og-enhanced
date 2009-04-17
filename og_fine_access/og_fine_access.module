@@ -82,8 +82,8 @@ function og_fine_access_nodeapi(&$node, $op) {
   if ($op === 'load') {
     $node->og_fine_access_posts = _og_fine_access_get_privacy($node->nid);
   }
-  else if (!$is_group && $op === 'prepare' && $node->og_fine_access_posts !== _og_fine_access_calculate_privacy($node->og_groups)) {
-    if ($node->og_fine_access_posts === OG_FINE_ACCESS_PRIVATE_POSTS) {
+  else if (!$is_group && $op === 'prepare' && $node->og_fine_access_posts != _og_fine_access_calculate_privacy($node->og_groups)) {
+    if ($node->og_fine_access_posts == OG_FINE_ACCESS_PRIVATE_POSTS) {
       drupal_set_message(t('One or more of this post\'s groups has become public - your post will also become public if you save it.'), 'warning');
     }
     else {
