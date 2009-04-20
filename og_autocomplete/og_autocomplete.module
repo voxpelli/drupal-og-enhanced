@@ -43,41 +43,18 @@ function og_autocomplete_menu() {
 function og_autocomplete_form_alter(&$form, $form_state, $form_id) {
   if (isset($form['#node']) && $form_id === $form['#node']->type .'_node_form' && og_is_group_post_type($form['#node']->type) && variable_get('og_autocomplete', OG_AUTOCOMPLETE_OFF) == OG_AUTOCOMPLETE_ON && isset($form['og_nodeapi']['visible']) && in_array($form['og_nodeapi']['visible']['og_groups']['#type'], array('select', 'checkboxes'))) {
     $node = $form['#node'];
-    $options = array();
-    $og_field = $form['og_nodeapi']['visible']['og_groups'];
-    $og_field_options = $og_field['#options'];
+    $groups = $form['og_nodeapi']['visible']['og_groups']['#default_value'];
+    $og_field_options = $form['og_nodeapi']['visible']['og_groups']['#options'];
 
     if (isset($og_field_options[t('My groups')]) || isset($og_field_options[t('Other groups')])) {
-      $og_field_options = array_merge($og_field_options[t('My groups')], $og_field_options[t('Other groups')]);
+      $og_field_options = $og_field_options[t('My groups')] + $og_field_options[t('Other groups')];
     }
 
-    //Make sure that the groups are an array
-    if (!is_array($node->og_groups)) {
-      $node->og_groups = (array) $node->og_groups;
-    }
-
-    //Make sure that we have the group descriptions
-    if (!isset($node->og_groups_both)) {
-      if (!empty($node->og_groups)) {
-        //Create og_groups_both
-        foreach ($node->og_groups as $nid) {
-          $node->og_groups_both[$nid] = $og_field_options[$nid];
-        }
-      }
-      else {
-        $node->og_groups_both = array();
-      }
-    }
-
-    if (user_access('administer nodes')) {
-      // Node admins see all of groups.
-      $options = $node->og_groups_both;
-    }
-    else {
-      foreach ($node->og_groups as $key) {
-        if (isset($og_field_options[$key])) {
-          $options[$key] = $og_field_options[$key];
-        }
+    // Build the options array.
+    $options = array();
+    foreach ($groups as $key => $nid) {
+      if (isset($og_field_options[$nid])) {
+        $options[$nid] = $og_field_options[$nid];
       }
     }
 
@@ -110,6 +87,7 @@ function og_autocomplete_form_alter(&$form, $form_state, $form_id) {
 
     $form['og_nodeapi']['visible']['og_groups']['#type'] = 'checkboxes';
     $form['og_nodeapi']['visible']['og_groups']['#options'] = $options;
+    $form['og_nodeapi']['visible']['og_groups']['#default_values'] = $groups;
   }
 }
 
